@@ -1,0 +1,98 @@
+services:
+  postgres_db:
+    image: postgres:13-alpine
+    container_name: postgres_mlops
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB_AIRFLOW}
+      - POSTGRES_DB_MLFLOW=${POSTGRES_DB_MLFLOW}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres_init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_AIRFLOW}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mlflow_server:
+    build: ./mlflow_custom
+    container_name: mlflow_server
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB_MLFLOW}
+      --default-artifact-root file:/mlruns
+      --host 0.0.0.0
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+
+  airflow-init:
+    build: ./airflow
+    container_name: airflow_init
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB_AIRFLOW}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__CORE__TEST_CONNECTION=Enabled
+    command: >
+      bash -c "airflow db init && airflow users create --username admin --password admin --firstname User --lastname Test --role Admin --email admin@example.com"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+
+  airflow-scheduler:
+    build: ./airflow
+    container_name: airflow_scheduler
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - mlruns_data:/mlruns
+      - ./data:/opt/airflow/data # <-- LÍNEA AÑADIDA
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB_AIRFLOW}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__CORE__TEST_CONNECTION=Enabled
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-webserver:
+    build: ./airflow
+    container_name: airflow_webserver
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - mlruns_data:/mlruns
+      - ./data:/opt/airflow/data # <-- LÍNEA AÑADIDA
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB_AIRFLOW}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__CORE__TEST_CONNECTION=Enabled
+    command: webserver
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+  
+  fastapi_app:
+    container_name: fastapi_app
+    build: ./fastapi_app
+    volumes:
+      - mlruns_data:/mlruns
+    ports:
+      - "8000:80"
+    depends_on:
+      mlflow_server:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  mlruns_data:

@@ -1,0 +1,9 @@
+jupyterlab
+tensorflow
+torch
+torchvision
+torchaudio
+pandas
+scikit-learn
+matplotlib
+seaborn

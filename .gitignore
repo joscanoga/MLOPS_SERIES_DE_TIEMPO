@@ -1,0 +1,39 @@
+# Entornos virtuales de Python
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Archivos de Python compilados y caché
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Checkpoints de Jupyter Notebook
+.ipynb_checkpoints/
+
+# Datos y artefactos de MLflow
+# Esto evita que los resultados de los experimentos se suban al repositorio.
+mlflow/mlruns/
+mlflow/mlartifacts/
+mlruns/
+
+# Archivos de configuración de IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de datos (es una buena práctica no versionarlos)
+# Descomenta si tienes carpetas o archivos de datos específicos
+# data/
+# *.csv
+# *.parquet
+# *.pkl
